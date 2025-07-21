@@ -76,17 +76,18 @@ export default function Dashboard() {
       const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
       const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString()
 
-      // Load today's orders for revenue calculation
-      const todayOrders = await blink.db.orders.list({
+      // Load all orders for this restaurant
+      const allOrders = await blink.db.orders.list({
         where: { 
           restaurant_id: restaurant.id
         }
       })
       
       // Filter today's orders manually since we need date range
-      const todayOrdersFiltered = todayOrders.filter(order => {
+      const todayOrdersFiltered = allOrders.filter(order => {
         const orderDate = new Date(order.created_at)
-        return orderDate >= new Date(todayStart) && orderDate < new Date(todayEnd)
+        const today = new Date()
+        return orderDate.toDateString() === today.toDateString()
       })
 
       // Calculate today's revenue
@@ -101,33 +102,26 @@ export default function Dashboard() {
       })
 
       // Load tables from restaurant_tables
-      const tables = await blink.db.restaurantTables.list({
+      const tables = await blink.db.restaurant_tables.list({
         where: { restaurant_id: restaurant.id }
       })
       const availableTables = tables.filter(table => table.status === 'available').length
 
-      // Load pending orders
-      const pendingOrders = await blink.db.orders.list({
-        where: { 
-          restaurant_id: restaurant.id,
-          status: 'pending'
-        }
-      })
+      // Load pending orders (filter from allOrders)
+      const pendingOrders = allOrders.filter(order => order.status === 'pending')
 
       // Load low stock items
       const inventory = await blink.db.inventory.list({
-        where: { user_id: user.id }
+        where: { restaurant_id: restaurant.id }
       })
       const lowStockItems = inventory.filter(item => 
         Number(item.current_stock) <= Number(item.minimum_stock)
       ).length
 
-      // Load recent orders
-      const recent = await blink.db.orders.list({
-        where: { restaurant_id: restaurant.id },
-        orderBy: { created_at: 'desc' },
-        limit: 5
-      })
+      // Load recent orders (use the same allOrders data)
+      const recent = allOrders
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5)
 
       setStats({
         todayRevenue,
